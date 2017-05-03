@@ -28,6 +28,8 @@
                </VBox.margin>
             </CheckBox>
             <CheckBox fx:id="histeq" mnemonicParsing="false" text="Equalize histogram" />
+            <CheckBox fx:id="haarClassifier" mnemonicParsing="false" onAction="#haarSelected" text="Haar Classifier" />
+            <CheckBox fx:id="lbpClassifier" mnemonicParsing="false" onAction="#lbpSelected" text="LBP Classifier" />
          </children>
          <padding>
             <Insets left="10.0" right="20.0" />

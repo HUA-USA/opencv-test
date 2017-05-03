@@ -41,8 +41,11 @@ public class FXCV extends Application
 			// show the GUI
 			primaryStage.show();
 			
-			// set the proper behavior on closing the application
+			// init the controller
 			FXCVController controller = loader.getController();
+			controller.init();
+			
+			// set the proper behavior on closing the application
 			primaryStage.setOnCloseRequest((new EventHandler<WindowEvent>() {
 				public void handle(WindowEvent we)
 				{

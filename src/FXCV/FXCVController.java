@@ -9,14 +9,23 @@ import java.util.concurrent.TimeUnit;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.Rect;
 import org.opencv.core.MatOfFloat;
 import org.opencv.core.MatOfInt;
+import org.opencv.core.MatOfRect;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
+
 import org.opencv.imgproc.Imgproc;
+
+import org.opencv.objdetect.CascadeClassifier;
+import org.opencv.objdetect.Objdetect;
+
 import org.opencv.videoio.VideoCapture;
 
 import javafx.event.ActionEvent;
+import javafx.event.Event;
 import javafx.fxml.FXML;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Button;
@@ -52,14 +61,36 @@ public class FXCVController
 	@FXML
 	private ImageView currentFrame;
 	
+	// checkboxes for enabling/disabling a classifier
+	@FXML
+	private CheckBox haarClassifier;
+	@FXML
+	private CheckBox lbpClassifier;
+	
 	// a timer for acquiring the video stream
 	private ScheduledExecutorService timer;
 	// the OpenCV object that realizes the video capture
-	private VideoCapture capture = new VideoCapture();
+	private VideoCapture capture;
 	// a flag to change the button behavior
 	private boolean cameraActive = false;
 	// the id of the camera to be used
 	private static int cameraId = 0;
+	
+	// face cascade classifier
+	private CascadeClassifier faceCascade;
+	private int absoluteFaceSize;
+	
+	protected void init()
+	{
+		this.capture = new VideoCapture();
+		this.faceCascade = new CascadeClassifier();
+		this.absoluteFaceSize = 0;
+		
+		// set a fixed width for the frame
+		currentFrame.setFitWidth(600);
+		// preserve image ratio
+		currentFrame.setPreserveRatio(true);
+	}
 	
 	/**
 	 * The action triggered by pushing the button on the GUI
@@ -72,6 +103,10 @@ public class FXCVController
 	{
 		if (!this.cameraActive)
 		{
+			// disable setting checkboxes
+			this.haarClassifier.setDisable(true);
+			this.lbpClassifier.setDisable(true);
+						
 			// start the video capture
 			this.capture.open(cameraId);
 			
@@ -113,6 +148,10 @@ public class FXCVController
 			// update again the button content
 			this.start_btn.setText("Start Camera");
 			
+			// enable classifiers checkboxes
+			this.haarClassifier.setDisable(false);
+			this.lbpClassifier.setDisable(false);
+			
 			// stop the timer
 			this.stopAcquisition();
 		}
@@ -139,6 +178,9 @@ public class FXCVController
 				// if the frame is not empty, process it
 				if (!frame.empty())
 				{
+					// face detection
+					this.detectAndDisplay(frame);
+					
 					if (grayscale.isSelected())
 					{
 					   Imgproc.cvtColor(frame, frame, Imgproc.COLOR_BGR2GRAY);
@@ -264,6 +306,86 @@ public class FXCVController
 		} else {
 			Imgproc.equalizeHist(frame, frame);
 		}		
+	}
+	
+	/**
+	 * Method for face detection and tracking
+	 * 
+	 * @param frame
+	 *            it looks for faces in this frame
+	 */
+	private void detectAndDisplay(Mat frame)
+	{
+		MatOfRect faces = new MatOfRect();
+		Mat grayFrame = new Mat();
+		
+		// convert the frame in gray scale
+		Imgproc.cvtColor(frame, grayFrame, Imgproc.COLOR_BGR2GRAY);
+		// equalize the frame histogram to improve the result
+		Imgproc.equalizeHist(grayFrame, grayFrame);
+		
+		// compute minimum face size (20% of the frame height, in our case)
+		if (this.absoluteFaceSize == 0)
+		{
+			int height = grayFrame.rows();
+			if (Math.round(height * 0.2f) > 0)
+			{
+				this.absoluteFaceSize = Math.round(height * 0.2f);
+			}
+		}
+		
+		// detect faces
+		this.faceCascade.detectMultiScale(grayFrame, faces, 1.1, 2, 0 | Objdetect.CASCADE_SCALE_IMAGE,
+				new Size(this.absoluteFaceSize, this.absoluteFaceSize), new Size());
+				
+		// each rectangle in faces is a face: draw them!
+		Rect[] facesArray = faces.toArray();
+		for (int i = 0; i < facesArray.length; i++)
+			Imgproc.rectangle(frame, facesArray[i].tl(), facesArray[i].br(), new Scalar(0, 255, 0), 3);
+			
+	}
+	
+	/**
+	 * The action triggered by selecting the Haar Classifier checkbox. It loads
+	 * the trained set to be used for frontal face detection.
+	 */
+	@FXML
+	protected void haarSelected(Event event)
+	{
+		// check whether the lpb checkbox is selected and deselect it
+		if (this.lbpClassifier.isSelected())
+			this.lbpClassifier.setSelected(false);
+			
+		this.checkboxSelection("resources/haarcascades/haarcascade_frontalface_alt.xml");
+	}
+	
+	/**
+	 * The action triggered by selecting the LBP Classifier checkbox. It loads
+	 * the trained set to be used for frontal face detection.
+	 */
+	@FXML
+	protected void lbpSelected(Event event)
+	{
+		// check whether the haar checkbox is selected and deselect it
+		if (this.haarClassifier.isSelected())
+			this.haarClassifier.setSelected(false);
+			
+		this.checkboxSelection("resources/lbpcascades/lbpcascade_frontalface.xml");
+	}
+	
+	/**
+	 * Method for loading a classifier trained set from disk
+	 * 
+	 * @param classifierPath
+	 *            the path on disk where a classifier trained set is located
+	 */
+	private void checkboxSelection(String classifierPath)
+	{
+		// load the classifier(s)
+		this.faceCascade.load(classifierPath);
+		
+		// now the video capture can start
+		this.start_btn.setDisable(false);
 	}
 	
 	/**
